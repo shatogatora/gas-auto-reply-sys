@@ -1,0 +1,159 @@
+// 返信用のメールアドレスを設定するためのコード
+function getEmail() {
+  var sheet = SpreadsheetApp.openById('1K3NHEtWNpP0fjd612CjeCv59p9frUjvHcD19pzdze4A').getSheetByName('フォームの回答');
+  var emailColumn = 2;
+  var dataRange = sheet.getDataRange();
+  var data = dataRange.getValues();
+  var emails = [];
+
+  // データをループしてメールアドレスを取得
+  for (var i = 1; i < data.length; i++) {
+    var email = data[i][emailColumn - 1];
+    // 重複をチェックしてから追加
+    if (emails.indexOf(email) === -1) {
+      emails.push(email);
+    }
+  }
+
+  return emails;
+}
+
+// データを取得する関数
+function getData() {
+  var sheet = SpreadsheetApp.openById('1K3NHEtWNpP0fjd612CjeCv59p9frUjvHcD19pzdze4A').getSheetByName('フォームの回答');
+  var dataRange = sheet.getDataRange();
+  var data = dataRange.getValues();
+
+  var responses1 = {};
+  var responses2 = {};
+  var responses3 = {};
+  var responses4 = {};
+  var responses5 = {};
+  var responses6 = {};
+
+  // データをループして各質問の回答を集計
+  for (var i = 1; i < data.length; i++) {
+    var answer1 = data[i][2];
+    var answer2 = data[i][3];
+    var answer3 = data[i][4];
+    var answer4 = data[i][5];
+    var answer5 = data[i][6];
+    var answer6 = data[i][7];
+
+    // 回答が空でない場合のみ集計
+    if (answer1 !== "") {
+      responses1[answer1] = (responses1[answer1] || 0) + 1;
+    }
+    if (answer2 !== "") {
+      responses2[answer2] = (responses2[answer2] || 0) + 1;
+    }
+    if (answer3 !== "") {
+      responses3[answer3] = (responses3[answer3] || 0) + 1;
+    }
+    if (answer4 !== "") {
+      responses4[answer4] = (responses4[answer4] || 0) + 1;
+    }
+    if (answer5 !== "") {
+      responses5[answer5] = (responses5[answer5] || 0) + 1;
+    }
+    if (answer6 !== "") {
+      responses6[answer6] = (responses6[answer6] || 0) + 1;
+    }
+  }
+
+  return {
+    responses1: responses1,
+    responses2: responses2,
+    responses3: responses3,
+    responses4: responses4,
+    responses5: responses5,
+    responses6: responses6
+  };
+}
+
+
+// 質問ごとの選択肢の順序を定義した配列
+var questionOptions = [
+  ['とても楽しかった', '楽しかった', '普通', '楽しくはなかった', 'とても楽しくなかった'],
+  ['とても深まった', '深まった', '普通', '深まらなかった', 'とても深まらなかった'],
+  ['生体計測の基礎、生体画像解析', 'Pythonで作業を効率化', '職域の撮影画像を用いたAI評価システムなど', 'Watosonを用いた承認審査支援ツールの開発 自然言語解析AI', 'AI・機械学習とは / Web3.0とBlockchain', '画像AI CNNの基礎', '病理組織標本を用いたAI評価システム開発', '実践的な開発プロセスの体験', 'まとめ'],
+  ['とてもしたい', 'したい', '普通', 'したくない', 'とてもしたくない']
+];
+
+function sendCharts() {
+  var emails = getEmail();
+  var data = getData();
+  var emailBody = "アンケート集計結果：<br><br>";
+
+  // 質問1から質問4までの集計結果をメール本文に追加
+  var attachments = []; // 添付ファイルを格納する配列
+  for (var i = 1; i <= 4; i++) {
+    emailBody += "質問" + i + ":<br>";
+
+    // 質問ごとの選択肢の順序を取得
+    var options = questionOptions[i - 1];
+
+    // 選択肢ごとの回答をループしてメール本文に追加
+    options.forEach(function(option) {
+      emailBody += option + ": " + (data['responses' + i][option] || 0) + "<br>";
+    });
+    emailBody += "<br>";
+
+    // 質問1から質問4までの集計結果の円グラフを作成
+    var chartData = Charts.newDataTable()
+      .addColumn(Charts.ColumnType.STRING, '回答')
+      .addColumn(Charts.ColumnType.NUMBER, '数');
+
+    // 選択肢ごとの回答数をグラフデータに追加
+    options.forEach(function(option) {
+      chartData.addRow([option, data['responses' + i][option] || 0]);
+    });
+
+    var pieChart = Charts.newPieChart()
+      .setDataTable(chartData)
+      .setTitle('質問' + i + 'の回答')
+      .setDimensions(400, 300)
+      .build();
+
+    // グラフを画像として取得
+    var chartBlob = pieChart.getAs('image/png').setName('chart' + i + '.png');
+
+    // 添付ファイルとして追加
+    attachments.push(chartBlob);
+  }
+
+  // 質問５と質問６の回答を集計してメール本文に追加
+  emailBody += "質問5の回答：<br>";
+  emailBody += getNonEmptyAnswers(data.responses5).join("<br>");
+  emailBody += "<br><br>";
+
+  emailBody += "質問6の回答：<br>";
+  emailBody += getNonEmptyAnswers(data.responses6).join("<br>");
+
+   // 画像を添付ファイルとして送信
+  emails.forEach(function(email) {
+    MailApp.sendEmail({
+      to: email,
+      subject: "アンケート集計結果",
+      htmlBody: emailBody,
+      attachments: attachments
+    });
+  });
+
+  // 先生にもメールを送信
+  var adminEmail = "j2200036@gunma-u.ac.jp"; // 先生のメールアドレスを設定
+  MailApp.sendEmail({
+    to: adminEmail,
+    subject: "アンケート集計結果",
+    htmlBody: emailBody,
+    attachments: attachments
+  });
+}
+
+// 空白と重複を除いた回答を取得する関数
+function getNonEmptyAnswers(responses) {
+  var uniqueAnswers = Object.keys(responses).filter(function(answer) {
+    return responses[answer] > 0 && answer.trim() !== ""; // 空白と重複を除く
+  });
+  return uniqueAnswers;
+}
